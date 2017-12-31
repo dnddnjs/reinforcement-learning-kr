@@ -3,6 +3,7 @@ import random
 from environment import Env
 from collections import defaultdict
 
+
 class QLearningAgent:
     def __init__(self, actions):
         # 행동 = [0, 1, 2, 3] 순서대로 상, 하, 좌, 우

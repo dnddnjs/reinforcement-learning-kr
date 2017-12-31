@@ -17,7 +17,7 @@ EPISODES = 50000
 # 브레이크아웃에서의 DQN 에이전트
 class DQNAgent:
     def __init__(self, action_size):
-        self.render = False
+        self.render = True
         self.load_model = False
         # 상태와 행동의 크기 정의
         self.state_size = (84, 84, 4)
@@ -29,7 +29,7 @@ class DQNAgent:
         self.epsilon_decay_step = (self.epsilon_start - self.epsilon_end) \
                                   / self.exploration_steps
         self.batch_size = 32
-        self.train_start = 50000
+        self.train_start = 1000
         self.update_target_rate = 10000
         self.discount_factor = 0.99
         # 리플레이 메모리, 최대 크기 400000
@@ -185,6 +185,7 @@ if __name__ == "__main__":
 
         for _ in range(random.randint(1, agent.no_op_steps)):
             observe, _, _, _ = env.step(1)
+
 
         state = pre_processing(observe)
         history = np.stack((state, state, state, state), axis=2)

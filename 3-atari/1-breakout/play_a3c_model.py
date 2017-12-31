@@ -12,6 +12,7 @@ episode = 0
 EPISODES = 8000000
 env_name = "BreakoutDeterministic-v4"
 
+
 class TestAgent:
     def __init__(self, action_size):
         self.state_size = (84, 84, 4)
@@ -48,6 +49,7 @@ class TestAgent:
 
     def load_model(self, name):
         self.actor.load_weights(name)
+
 
 def pre_processing(next_observe, observe):
     processed_observe = np.maximum(next_observe, observe)

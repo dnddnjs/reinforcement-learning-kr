@@ -9,6 +9,7 @@ from keras import backend as K
 
 EPISODES = 2500
 
+
 # 그리드월드 예제에서의 REINFORCE 에이전트
 class ReinforceAgent:
     def __init__(self):

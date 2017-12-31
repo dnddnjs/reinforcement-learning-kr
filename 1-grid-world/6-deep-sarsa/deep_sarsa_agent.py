@@ -34,9 +34,7 @@ class DeepSARSAgent:
     # 상태가 입력 큐함수가 출력인 인공신경망 생성
     def build_model(self):
         model = Sequential()
-        model.add(Dense(30, input_dim=self.state_size, activation='relu'))
-        model.add(Dense(30, activation='relu'))
-        model.add(Dense(self.action_size, activation='linear'))
+        model.add(Dense(self.action_size, input_dim=self.state_size, activation='linear'))
         model.summary()
         model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
         return model
@@ -52,7 +50,7 @@ class DeepSARSAgent:
             q_values = self.model.predict(state)
             return np.argmax(q_values[0])
 
-    def train_model(self, state, action, reward, next_state, next_action, done):
+    def train_model(self, state, action, reward, next_state, done):
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
@@ -64,7 +62,7 @@ class DeepSARSAgent:
             target[action] = reward
         else:
             target[action] = (reward + self.discount_factor *
-                              self.model.predict(next_state)[0][next_action])
+                              np.amax(self.model.predict(next_state)[0]))
 
         # 출력 값 reshape
         target = np.reshape(target, [1, 5])
@@ -97,7 +95,7 @@ if __name__ == "__main__":
             next_state = np.reshape(next_state, [1, 15])
             next_action = agent.get_action(next_state)
             # 샘플로 모델 학습
-            agent.train_model(state, action, reward, next_state, next_action,
+            agent.train_model(state, action, reward, next_state,
                               done)
             state = next_state
             score += reward

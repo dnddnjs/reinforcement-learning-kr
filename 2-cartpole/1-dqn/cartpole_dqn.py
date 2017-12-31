@@ -8,7 +8,7 @@ from keras.layers import Dense
 from keras.optimizers import Adam
 from keras.models import Sequential
 
-EPISODES = 300
+EPISODES = 700
 
 
 # 카트폴 예제에서의 DQN 에이전트
@@ -25,13 +25,13 @@ class DQNAgent:
         self.discount_factor = 0.99
         self.learning_rate = 0.001
         self.epsilon = 1.0
-        self.epsilon_decay = 0.999
+        self.epsilon_decay = 0.9999
         self.epsilon_min = 0.01
         self.batch_size = 64
-        self.train_start = 1000
+        self.train_start = 5000
 
         # 리플레이 메모리, 최대 크기 2000
-        self.memory = deque(maxlen=2000)
+        self.memory = deque(maxlen=20000)
 
         # 모델과 타깃 모델 생성
         self.model = self.build_model()
@@ -76,7 +76,6 @@ class DQNAgent:
     def train_model(self):
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
-
         # 메모리에서 배치 크기만큼 무작위로 샘플 추출
         mini_batch = random.sample(self.memory, self.batch_size)
 
@@ -136,7 +135,7 @@ if __name__ == "__main__":
             next_state, reward, done, info = env.step(action)
             next_state = np.reshape(next_state, [1, state_size])
             # 에피소드가 중간에 끝나면 -100 보상
-            reward = reward if not done or score == 499 else -100
+            reward = reward if not done or score == 499 else -10
 
             # 리플레이 메모리에 샘플 <s, a, r, s'> 저장
             agent.append_sample(state, action, reward, next_state, done)
@@ -151,7 +150,7 @@ if __name__ == "__main__":
                 # 각 에피소드마다 타깃 모델을 모델의 가중치로 업데이트
                 agent.update_target_model()
 
-                score = score if score == 500 else score + 100
+                score = score if score == 500 else score + 10
                 # 에피소드마다 학습 결과 출력
                 scores.append(score)
                 episodes.append(e)
@@ -161,6 +160,6 @@ if __name__ == "__main__":
                       len(agent.memory), "  epsilon:", agent.epsilon)
 
                 # 이전 10개 에피소드의 점수 평균이 490보다 크면 학습 중단
-                if np.mean(scores[-min(10, len(scores)):]) > 490:
-                    agent.model.save_weights("./save_model/cartpole_dqn.h5")
-                    sys.exit()
+                # if np.mean(scores[-min(10, len(scores)):]) > 490:
+                #     agent.model.save_weights("./save_model/cartpole_dqn.h5")
+                #     sys.exit()

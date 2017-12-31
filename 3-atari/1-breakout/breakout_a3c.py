@@ -29,10 +29,9 @@ class A3CAgent:
         # A3C 하이퍼파라미터
         self.discount_factor = 0.99
         self.no_op_steps = 30
-        self.actor_lr = 2.5e-4
-        self.critic_lr = 2.5e-4
+        self.learning_rate = 0.0001
         # 쓰레드의 갯수
-        self.threads = 8
+        self.threads = 4
 
         # 정책신경망과 가치신경망을 생성
         self.actor, self.critic = self.build_model()
@@ -56,7 +55,8 @@ class A3CAgent:
                         [self.actor, self.critic], self.sess,
                         self.optimizer, self.discount_factor,
                         [self.summary_op, self.summary_placeholders,
-                         self.update_ops, self.summary_writer])
+                         self.update_ops, self.summary_writer],
+                        self.learning_rate)
                   for _ in range(self.threads)]
 
         # 각 쓰레드 시작
@@ -93,7 +93,7 @@ class A3CAgent:
         return actor, critic
 
     # 정책신경망을 업데이트하는 함수
-    def actor_optimizer(self):
+    def actor_optimizer(self, learning_rate=0.001):
         action = K.placeholder(shape=[None, self.action_size])
         advantages = K.placeholder(shape=[None, ])
 
@@ -111,14 +111,14 @@ class A3CAgent:
         # 두 오류함수를 더해 최종 오류함수를 만듬
         loss = cross_entropy + 0.01 * entropy
 
-        optimizer = RMSprop(lr=self.actor_lr, rho=0.99, epsilon=0.01)
-        updates = optimizer.get_updates(self.actor.trainable_weights, [],loss)
+        optimizer = RMSprop(lr=learning_rate, rho=0.99, epsilon=0.01)
+        updates = optimizer.get_updates(self.actor.trainable_weights, [], loss)
         train = K.function([self.actor.input, action, advantages],
                            [loss], updates=updates)
         return train
 
     # 가치신경망을 업데이트하는 함수
-    def critic_optimizer(self):
+    def critic_optimizer(self, learning_rate=0.001):
         discounted_prediction = K.placeholder(shape=(None,))
 
         value = self.critic.output
@@ -126,7 +126,7 @@ class A3CAgent:
         # [반환값 - 가치]의 제곱을 오류함수로 함
         loss = K.mean(K.square(discounted_prediction - value))
 
-        optimizer = RMSprop(lr=self.critic_lr, rho=0.99, epsilon=0.01)
+        optimizer = RMSprop(lr=learning_rate, rho=0.99, epsilon=0.01)
         updates = optimizer.get_updates(self.critic.trainable_weights, [],loss)
         train = K.function([self.critic.input, discounted_prediction],
                            [loss], updates=updates)
@@ -165,7 +165,7 @@ class A3CAgent:
 # 액터러너 클래스(쓰레드)
 class Agent(threading.Thread):
     def __init__(self, action_size, state_size, model, sess,
-                 optimizer, discount_factor, summary_ops):
+                 optimizer, discount_factor, summary_ops, learning_rate):
         threading.Thread.__init__(self)
 
         # A3CAgent 클래스에서 상속
@@ -177,6 +177,7 @@ class Agent(threading.Thread):
         self.discount_factor = discount_factor
         [self.summary_op, self.summary_placeholders,
          self.update_ops, self.summary_writer] = summary_ops
+        self.learning_rate = learning_rate
 
         # 지정된 타임스텝동안 샘플을 저장할 리스트
         self.states, self.actions, self.rewards = [], [], []
@@ -195,6 +196,7 @@ class Agent(threading.Thread):
         global episode
         env = gym.make(env_name)
 
+        global_step = 0
         step = 0
 
         while episode < EPISODES:
@@ -216,7 +218,9 @@ class Agent(threading.Thread):
 
             while not done:
                 step += 1
+                global_step += 1
                 self.t += 1
+
                 observe = next_observe
                 action, policy = self.get_action(history)
 
@@ -265,6 +269,8 @@ class Agent(threading.Thread):
                     history = next_history
 
                 # 에피소드가 끝나거나 최대 타임스텝 수에 도달하면 학습을 진행
+                self.learning_rate = 0.001 * (500000 - global_step) / 500000
+
                 if self.t >= self.t_max or done:
                     self.train_model(done)
                     self.update_local_model()
@@ -274,7 +280,8 @@ class Agent(threading.Thread):
                     # 각 에피소드 당 학습 정보를 기록
                     episode += 1
                     print("episode:", episode, "  score:", score, "  step:",
-                          step)
+                          step, " learning_rate: ", self.learning_rate,
+                          " global_steps: ", global_step)
 
                     stats = [score, self.avg_p_max / float(step),
                              step]
@@ -317,8 +324,8 @@ class Agent(threading.Thread):
 
         advantages = discounted_prediction - values
 
-        self.optimizer[0]([states, self.actions, advantages])
-        self.optimizer[1]([states, discounted_prediction])
+        self.optimizer[0]([states, self.actions, advantages, self.learning_rate])
+        self.optimizer[1]([states, discounted_prediction, self.learning_rate])
         self.states, self.actions, self.rewards = [], [], []
 
     # 로컬신경망을 생성하는 함수

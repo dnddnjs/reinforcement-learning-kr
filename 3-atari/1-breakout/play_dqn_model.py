@@ -11,6 +11,7 @@ from keras import backend as K
 
 EPISODES = 50000
 
+
 class TestAgent:
     def __init__(self, action_size):
         self.state_size = (84, 84, 4)
@@ -48,6 +49,7 @@ class TestAgent:
     def load_model(self, filename):
         self.model.load_weights(filename)
 
+
 def pre_processing(observe):
     processed_observe = np.uint8(
         resize(rgb2gray(observe), (84, 84), mode='constant') * 255)
@@ -62,7 +64,7 @@ if __name__ == "__main__":
     for e in range(EPISODES):
         done = False
         dead = False
-       
+
         step, score, start_life = 0, 0, 5
         observe = env.reset()
 
@@ -106,4 +108,3 @@ if __name__ == "__main__":
 
             if done:
                 print("episode:", e, "  score:", score)
-

@@ -28,7 +28,7 @@ class Env(tk.Tk):
         self.set_reward([1, 2], -1)
         self.set_reward([2, 3], -1)
         # 목표 지점 설정
-        self.set_reward([4, 4], 1)
+        self.set_reward([4, 4], 10)
 
     def _build_canvas(self):
         canvas = tk.Canvas(self, bg='white',
