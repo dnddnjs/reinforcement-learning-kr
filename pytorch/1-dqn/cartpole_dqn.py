@@ -14,8 +14,16 @@ from torchvision import transforms
 EPISODES = 700
 
 
+# custom weights initialization called on netG and netD
+def weights_init(model):
+    classname = model.__class__.__name__
+    if classname.find('Conv') != -1:
+        nn.init.xavier_normal(model.weight.data)
+        model.bias.data.fill_(0)
+
+
 class DQN(nn.Module):
-    def __init__(self, state_size, action_size):
+    def __init__(self, state_size=4, action_size=2):
         super(DQN, self).__init__()
         self.fc = nn.Sequential(
             nn.Linear(state_size, 24),
@@ -30,9 +38,8 @@ class DQN(nn.Module):
 
 
 # 카트폴 예제에서의 DQN 에이전트
-class DQNAgent(DQN):
+class DQNAgent():
     def __init__(self, state_size, action_size):
-        super(DQN, self).__init__()
         self.render = False
         self.load_model = False
 
@@ -44,47 +51,41 @@ class DQNAgent(DQN):
         self.discount_factor = 0.99
         self.learning_rate = 0.001
         self.epsilon = 1.0
-        self.epsilon_decay = 0.9999
+        self.epsilon_decay = 0.999
         self.epsilon_min = 0.01
         self.batch_size = 64
-        self.train_start = 5000
+        self.train_start = 1000
 
         # 리플레이 메모리, 최대 크기 2000
-        self.memory = deque(maxlen=20000)
+        self.memory = deque(maxlen=2000)
 
         # 모델과 타깃 모델 생성
-        self.model = self.build_model()
-        self.target_model = self.build_model()
+        self.model = DQN(state_size, action_size)
+        weights_init(self.model)
+        self.target_model = DQN(state_size, action_size)
+        self.optimizer = optim.Adam(self.model.parameters(),
+                                    lr=self.learning_rate)
+        self.loss = nn.MSELoss()
 
         # 타깃 모델 초기화
         self.update_target_model()
 
         if self.load_model:
-            self.model.load_weights("./save_model/cartpole_dqn_trained.h5")
-
-    # 상태가 입력, 큐함수가 출력인 인공신경망 생성
-    def build_model(self):
-        model = Sequential()
-        model.add(Dense(24, input_dim=self.state_size, activation='relu',
-                        kernel_initializer='he_uniform'))
-        model.add(Dense(24, activation='relu',
-                        kernel_initializer='he_uniform'))
-        model.add(Dense(self.action_size, activation='linear',
-                        kernel_initializer='he_uniform'))
-        model.summary()
-        model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
-        return model
+            self.model = torch.load('save_model/cartpole_dqn')
 
     # 타깃 모델을 모델의 가중치로 업데이트
     def update_target_model(self):
-        self.target_model.set_weights(self.model.get_weights())
+        self.target_model.load_state_dict(self.model.state_dict())
 
     # 입실론 탐욕 정책으로 행동 선택
     def get_action(self, state):
         if np.random.rand() <= self.epsilon:
             return random.randrange(self.action_size)
         else:
-            q_value = self.model.predict(state)
+            state = torch.from_numpy(state)
+            state = Variable(state).float().cpu()
+            q_value = self.model(state).cpu()
+            q_value = q_value.data.numpy()
             return np.argmax(q_value[0])
 
     # 샘플 <s, a, r, s'>을 리플레이 메모리에 저장
@@ -111,19 +112,34 @@ class DQNAgent(DQN):
 
         # 현재 상태에 대한 모델의 큐함수
         # 다음 상태에 대한 타깃 모델의 큐함수
-        target = self.model.predict(states)
-        target_val = self.target_model.predict(next_states)
+        states = torch.from_numpy(states)
+        states = Variable(states).float().cpu()
+        target_1 = self.model(states)
+        # target[64, 2]
+
+        next_states = torch.from_numpy(next_states)
+        next_states = Variable(next_states).float().cpu()
+        target_2 = self.target_model(next_states)
+        # target_val[64, 2]
+
+        pred = Variable(torch.zeros(target_1.size(0), 1))
+        target = Variable(torch.zeros(target_1.size(0), 1))
 
         # 벨만 최적 방정식을 이용한 업데이트 타깃
         for i in range(self.batch_size):
             if dones[i]:
-                target[i][actions[i]] = rewards[i]
-            else:
-                target[i][actions[i]] = rewards[i] + self.discount_factor * (
-                    np.amax(target_val[i]))
+                pred[i] = target_1[i][actions[i]]
+                target[i] = rewards[i]
 
-        self.model.fit(states, target, batch_size=self.batch_size,
-                       epochs=1, verbose=0)
+            else:
+                pred[i] = target_1[i][actions[i]]
+                target[i] = rewards[i] + self.discount_factor * target_2[i].max()
+
+        self.optimizer.zero_grad()
+        loss = ((pred - target) ** 2).mean()
+        loss.backward()
+
+        self.optimizer.step()
 
 
 if __name__ == "__main__":
@@ -132,7 +148,6 @@ if __name__ == "__main__":
     state_size = env.observation_space.shape[0]
     action_size = env.action_space.n
     model = DQN(state_size, action_size)
-
 
     # DQN 에이전트 생성
     agent = DQNAgent(state_size, action_size)
@@ -181,6 +196,6 @@ if __name__ == "__main__":
                       len(agent.memory), "  epsilon:", agent.epsilon)
 
                 # 이전 10개 에피소드의 점수 평균이 490보다 크면 학습 중단
-                # if np.mean(scores[-min(10, len(scores)):]) > 490:
-                #     agent.model.save_weights("./save_model/cartpole_dqn.h5")
-                #     sys.exit()
+                if np.mean(scores[-min(10, len(scores)):]) > 490:
+                    torch.save(agent.model, "./save_model/cartpole_dqn.h5")
+                    sys.exit()
