@@ -65,7 +65,6 @@ class DQNAgent():
         self.target_model = DQN(state_size, action_size)
         self.optimizer = optim.Adam(self.model.parameters(),
                                     lr=self.learning_rate)
-        self.loss = nn.MSELoss()
 
         # 타깃 모델 초기화
         self.update_target_model()
